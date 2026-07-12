@@ -92,6 +92,26 @@ PAGE_CSS = """
     pointer-events:none;}
   .save-flash.show{opacity:1;}
 
+  /* 撮影バー */
+  .shoot-bar{position:sticky;top:0;z-index:20;background:var(--paper);
+    border-bottom:2px solid var(--border);padding:12px 24px;
+    display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+  .shoot-bar button{font-weight:700;}
+  .shoot-bar .elapsed{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;
+    color:var(--accent);min-width:64px;}
+  .shoot-bar .speed{font-size:13px;color:var(--ink-dim);}
+
+  .block{transition:opacity .25s;}
+  body.shooting .block:not(.current){opacity:.35;}
+  body.shooting .block.current .block-text{box-shadow:0 0 0 3px var(--accent);}
+
+  body.focus-mode header,
+  body.focus-mode .shoot-bar .aux,
+  body.focus-mode .toc,
+  body.focus-mode .total-time{display:none;}
+  body.focus-mode .shoot-bar{background:rgba(250,246,239,.92);}
+  body.focus-mode main{padding-top:12px;}
+
   @media (max-width:600px){ .slide-text{font-size:calc(var(--fs, 32px) * 0.75);} }
 </style>
 """
@@ -177,16 +197,26 @@ def render_view(name: str):
 <title>{html.escape(name)}</title>{PAGE_CSS}</head><body>
 <header>
   <h1>{html.escape(name)}</h1>
-  <div>
+  <div class="aux">
     <a class="btn" href="/">一覧へ</a>
   </div>
 </header>
+<div class="toolbar aux" style="padding:12px 24px 0;">
+  <button onclick="adjust(-4)">A－</button>
+  <button onclick="adjust(4)">A＋</button>
+  <span style="font-size:12px;color:var(--ink-dim);">本文をタップして直接編集できます（触れなくなったら自動保存）</span>
+</div>
+<div class="shoot-bar">
+  <button class="primary" id="shootBtn" onclick="toggleShoot()">▶ 撮影開始</button>
+  <span class="elapsed" id="elapsed">0:00</span>
+  <span class="speed aux">自動スクロール速度：
+    <button onclick="changeSpeed(-1)">－</button>
+    <span id="speedLabel">標準</span>
+    <button onclick="changeSpeed(1)">＋</button>
+  </span>
+  <button onclick="toggleFocus()">集中モード</button>
+</div>
 <main>
-  <div class="toolbar">
-    <button onclick="adjust(-4)">A－</button>
-    <button onclick="adjust(4)">A＋</button>
-    <span style="font-size:12px;color:var(--ink-dim);">本文をタップして直接編集できます（触れなくなったら自動保存）</span>
-  </div>
   <div class="toc">{toc}</div>
   <div class="total-time">全体の目安時間：約{format_duration(total_seconds)}（文字数から自動計算、実際の話し方で前後します）</div>
   {blocks}
@@ -199,6 +229,7 @@ function adjust(d){{
   document.querySelectorAll('.txt').forEach(el => el.style.setProperty('--fs', fs + 'px'));
 }}
 
+const totalSeconds = {total_seconds};
 const fileName = {name!r};
 document.querySelectorAll('.block-text').forEach(el => {{
   let original = el.innerText;
@@ -217,6 +248,74 @@ document.querySelectorAll('.block-text').forEach(el => {{
     }});
   }});
 }});
+
+/* ===== 撮影サポート：自動スクロール＋経過時間タイマー ===== */
+let shooting = false;
+let elapsedSec = 0;
+let timerId = null;
+let scrollId = null;
+const speedSteps = [0.5, 0.75, 1, 1.25, 1.5, 2];
+let speedIdx = 2;
+const speedLabels = ["とても遅い", "遅い", "標準", "やや速い", "速い", "とても速い"];
+
+function updateElapsedDisplay(){{
+  const m = Math.floor(elapsedSec / 60), s = elapsedSec % 60;
+  document.getElementById('elapsed').textContent = m + ':' + String(s).padStart(2, '0');
+}}
+
+function toggleShoot(){{
+  shooting = !shooting;
+  const btn = document.getElementById('shootBtn');
+  document.body.classList.toggle('shooting', shooting);
+  if (shooting){{
+    btn.textContent = '■ 停止';
+    timerId = setInterval(() => {{ elapsedSec++; updateElapsedDisplay(); }}, 1000);
+    startAutoScroll();
+  }} else {{
+    btn.textContent = '▶ 撮影開始';
+    clearInterval(timerId);
+    cancelAnimationFrame(scrollId);
+  }}
+}}
+
+function startAutoScroll(){{
+  // 本文の総文字数 ÷ 目安時間 から、1秒あたりに進めるべきスクロール量を概算する
+  const doc = document.documentElement;
+  const scrollable = doc.scrollHeight - window.innerHeight;
+  const pxPerSecond = totalSeconds > 0 ? (scrollable / totalSeconds) : 0;
+  let last = performance.now();
+  function step(now){{
+    if (!shooting) return;
+    const dt = (now - last) / 1000;
+    last = now;
+    window.scrollBy(0, pxPerSecond * speedSteps[speedIdx] * dt);
+    scrollId = requestAnimationFrame(step);
+  }}
+  scrollId = requestAnimationFrame(step);
+}}
+
+function changeSpeed(d){{
+  speedIdx = Math.max(0, Math.min(speedSteps.length - 1, speedIdx + d));
+  document.getElementById('speedLabel').textContent = speedLabels[speedIdx];
+}}
+
+function toggleFocus(){{
+  document.body.classList.toggle('focus-mode');
+}}
+
+/* 今どのセクションを読んでいるかを画面中央付近の要素から判定して強調する */
+const blocks = Array.from(document.querySelectorAll('.block'));
+function highlightCurrent(){{
+  const centerY = window.innerHeight * 0.4;
+  let current = blocks[0];
+  for (const b of blocks){{
+    const r = b.getBoundingClientRect();
+    if (r.top <= centerY) current = b;
+  }}
+  blocks.forEach(b => b.classList.toggle('current', b === current));
+}}
+document.addEventListener('scroll', highlightCurrent, {{passive: true}});
+highlightCurrent();
 </script>
 </body></html>"""
 
