@@ -19,7 +19,9 @@ import sys
 PORT_RANGE_START = 8801
 PORT_RANGE_END = 8850
 BASE_DIR = pathlib.Path(__file__).resolve().parent.parent
-SCRIPT_DIR = BASE_DIR / "03_台本"
+# シンちゃん版専用フォルダ（ナギちゃん版の03_台本とは共有しない。
+# 編集はここだけに書き込まれるので、互いの編集が影響し合わない）
+SCRIPT_DIR = BASE_DIR / "03_台本_シンちゃん版"
 PORT_FILE = pathlib.Path("/tmp/ipadbiyori_shinchan.port")
 
 # セクション名のキーワード→色（縦帯・進捗ドットに使う）
