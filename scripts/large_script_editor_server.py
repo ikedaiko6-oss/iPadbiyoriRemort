@@ -78,6 +78,8 @@ PAGE_CSS = """
   .block:last-child{border-bottom:none;}
   .section-label{font-size:13px;color:#fff;background:var(--c);display:inline-block;
     padding:4px 14px;border-radius:20px;letter-spacing:.1em;margin-bottom:16px;}
+  .time-badge{font-size:12px;color:var(--ink-dim);margin-left:10px;letter-spacing:.05em;}
+  .total-time{font-size:13px;color:var(--ink-dim);margin-bottom:18px;}
   .block-text{font-size:var(--fs,30px);line-height:2;white-space:pre-wrap;
     letter-spacing:.02em;border-left:8px solid var(--c);padding:2% 4%;background:#fff;
     border-radius:4px;box-shadow:0 3px 14px rgba(43,38,32,.06);
@@ -101,6 +103,22 @@ def parse_slides(text: str):
 def section_label(slide_text: str) -> str:
     m = re.match(r"^【(.+?)】", slide_text)
     return m.group(1) if m else ""
+
+
+CHARS_PER_MINUTE = 300  # 日本語の実況・説明を想定した目安（ゆっくりめ）
+
+
+def estimate_seconds(text: str) -> int:
+    # 見出し【】・（画面録画：〜）のようなト書き・記号は読み上げないので除外してから数える
+    body = re.sub(r"^【.+?】\n?", "", text)
+    body = re.sub(r"（.*?）", "", body)
+    chars = len(re.sub(r"\s", "", body))
+    return max(5, round(chars / CHARS_PER_MINUTE * 60))
+
+
+def format_duration(seconds: int) -> str:
+    m, s = divmod(seconds, 60)
+    return f"{m}分{s:02d}秒" if m else f"{s}秒"
 
 
 def list_files():
@@ -140,9 +158,13 @@ def render_view(name: str):
         for i, s in enumerate(slides)
     )
 
+    durations = [estimate_seconds(s) for s in slides]
+    total_seconds = sum(durations)
+
     blocks = "".join(
         f'<div class="block" id="s{i}" style="--c:{color_for(section_label(s))}">'
-        f'<div class="section-label">{html.escape(section_label(s)) or "&nbsp;"}</div>'
+        f'<div class="section-label">{html.escape(section_label(s)) or "&nbsp;"}'
+        f'<span class="time-badge">約{format_duration(durations[i])}</span></div>'
         f'<div class="block-text txt" contenteditable="true" spellcheck="false" '
         f'data-idx="{i}">{html.escape(s)}</div>'
         f'</div>'
@@ -164,6 +186,7 @@ def render_view(name: str):
     <span style="font-size:12px;color:var(--ink-dim);">本文をタップして直接編集できます（触れなくなったら自動保存）</span>
   </div>
   <div class="toc">{toc}</div>
+  <div class="total-time">全体の目安時間：約{format_duration(total_seconds)}（文字数から自動計算、実際の話し方で前後します）</div>
   {blocks}
 </main>
 <div class="save-flash" id="flash">保存しました</div>
