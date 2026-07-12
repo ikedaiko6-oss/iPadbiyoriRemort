@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>撮影台本｜シニアのためのAI活用術</title>
+<style>
+  :root{
+    --bg:#e9ebee;
+    --slide-bg:#ffffff;
+    --ink:#1f2430;
+    --ink-dim:#6b7280;
+    --accent:#c0733a;
+    --gyoi:#3f6fa8;
+    --komarigoto:#c0733a;
+    --tejun:#b7952f;
+    --chuui:#a94f4f;
+    --comment:#4f8a5b;
+    --border:#d7dae0;
+    --panel:#f4f5f7;
+  }
+  *{box-sizing:border-box;}
+  html,body{
+    margin:0;
+    height:100%;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:"Hiragino Sans","Yu Gothic UI","Noto Sans JP",sans-serif;
+    overflow:hidden;
+  }
+  #app{
+    display:flex;
+    flex-direction:column;
+    height:100%;
+  }
+
+  header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:10px 22px;
+    border-bottom:1px solid var(--border);
+    background:var(--panel);
+    flex-shrink:0;
+  }
+  .title-block{
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+    min-width:0;
+  }
+  .eyebrow{
+    font-size:11px;
+    letter-spacing:.14em;
+    color:var(--accent);
+    font-weight:700;
+  }
+  .video-title{
+    font-size:14px;
+    color:var(--ink-dim);
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    max-width:46vw;
+  }
+  .header-controls{
+    display:flex;
+    align-items:center;
+    gap:14px;
+  }
+  .font-ctrl{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    background:#fff;
+    border:1px solid var(--border);
+    border-radius:8px;
+    padding:5px 10px;
+  }
+  .font-ctrl button{
+    background:var(--panel);
+    border:1px solid var(--border);
+    color:var(--ink);
+    font-size:16px;
+    width:28px;
+    height:28px;
+    border-radius:6px;
+    cursor:pointer;
+    line-height:1;
+  }
+  .font-ctrl button:hover{background:var(--border);}
+  .font-ctrl span{font-size:12px;color:var(--ink-dim);width:30px;text-align:center;}
+
+  #progress{
+    display:flex;
+    gap:8px;
+    padding:12px 22px;
+    background:var(--bg);
+    border-bottom:1px solid var(--border);
+    flex-shrink:0;
+    overflow-x:auto;
+  }
+  .dot{
+    flex-shrink:0;
+    width:34px;
+    height:20px;
+    border-radius:3px;
+    background:#fff;
+    border:2px solid var(--border);
+    cursor:pointer;
+    transition:border-color .15s, transform .15s;
+  }
+  .dot.active{border-color:var(--section-color,var(--accent)); transform:translateY(-2px); box-shadow:0 3px 6px rgba(0,0,0,.15);}
+  .dot.done{background:var(--panel);}
+
+  main{
+    flex:1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:26px 4vw;
+    overflow:hidden;
+    min-height:0;
+  }
+  .slide{
+    width:min(1100px, 92%);
+    max-height:82vh;
+    background:var(--slide-bg);
+    border-radius:6px;
+    box-shadow:0 10px 30px rgba(20,25,35,.18), 0 1px 0 rgba(0,0,0,.04);
+    display:flex;
+    flex-direction:column;
+    align-items:flex-start;
+    justify-content:flex-start;
+    text-align:left;
+    padding:5% 6%;
+    position:relative;
+    border-top:10px solid var(--section-color, var(--accent));
+    overflow-y:auto;
+  }
+  .section-tag{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding:5px 16px;
+    border-radius:999px;
+    font-size:13px;
+    font-weight:700;
+    letter-spacing:.06em;
+    margin-bottom:18px;
+    background:color-mix(in srgb, var(--section-color) 14%, white);
+    color:var(--section-color);
+  }
+  .action-note{
+    font-size:14px;
+    color:var(--ink-dim);
+    margin-bottom:14px;
+    min-height:1.4em;
+    font-style:italic;
+  }
+  .line-text{
+    font-size:var(--fs, 28px);
+    line-height:1.85;
+    font-weight:600;
+    max-width:100%;
+    white-space:pre-wrap;
+    word-break:keep-all;
+    color:var(--ink);
+    padding-bottom:20px;
+  }
+  .line-counter{
+    position:absolute;
+    bottom:14px;
+    right:22px;
+    font-size:12px;
+    color:var(--ink-dim);
+    background:rgba(255,255,255,.9);
+    padding:2px 8px;
+    border-radius:4px;
+  }
+  .slide-badge{
+    position:absolute;
+    top:16px;
+    right:22px;
+    font-size:12px;
+    color:var(--ink-dim);
+    letter-spacing:.05em;
+  }
+
+  footer{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:16px;
+    padding:16px;
+    background:var(--panel);
+    border-top:1px solid var(--border);
+    flex-shrink:0;
+  }
+  .nav-btn{
+    background:#fff;
+    border:1px solid var(--border);
+    color:var(--ink);
+    padding:12px 24px;
+    border-radius:8px;
+    font-size:15px;
+    font-weight:600;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    transition:transform .12s, background .15s, box-shadow .15s;
+    box-shadow:0 1px 2px rgba(0,0,0,.05);
+  }
+  .nav-btn:hover{background:var(--panel); box-shadow:0 2px 6px rgba(0,0,0,.1);}
+  .nav-btn:active{transform:scale(0.97);}
+  .nav-btn.primary{
+    background:var(--section-color,var(--accent));
+    color:#fff;
+    border-color:transparent;
+  }
+  .nav-btn:disabled{opacity:.35;cursor:default;}
+  .nav-btn.icon-only{padding:12px 16px;}
+
+  #overview{
+    position:fixed;
+    inset:0;
+    background:rgba(30,34,42,.55);
+    display:none;
+    flex-direction:column;
+    padding:26px 5vw 34px;
+    overflow-y:auto;
+    z-index:50;
+  }
+  #overview.show{display:flex;}
+  .ov-header{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    margin-bottom:18px;
+  }
+  .ov-header h2{margin:0;font-size:18px;color:#fff;}
+  .close-btn{
+    background:#fff;
+    border:1px solid var(--border);
+    color:var(--ink);
+    width:36px;height:36px;
+    border-radius:8px;
+    font-size:16px;
+    cursor:pointer;
+  }
+  .ov-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));
+    gap:16px;
+  }
+  .ov-item{
+    background:#fff;
+    border-radius:6px;
+    border-top:6px solid var(--c);
+    padding:16px;
+    cursor:pointer;
+    text-align:left;
+    box-shadow:0 2px 8px rgba(0,0,0,.12);
+    transition:transform .12s;
+  }
+  .ov-item:hover{transform:translateY(-3px);}
+  .ov-num{font-size:11px;color:var(--ink-dim);font-weight:700;margin-bottom:6px;}
+  .ov-text{
+    font-size:13px;
+    color:var(--ink);
+    line-height:1.5;
+  }
+  .ov-note{font-size:11px;color:var(--ink-dim);margin-top:6px;font-style:italic;}
+
+  @media (max-width:700px){
+    .video-title{display:none;}
+    .line-text{font-size:calc(var(--fs, 40px) * 0.6);}
+    .slide{padding:8% 7%;}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <header>
+    <div class="title-block">
+      <span class="eyebrow">撮影台本</span>
+      <span class="video-title">シニアのためのAI活用術｜ChatGPTに旅行準備を手伝ってもらう方法</span>
+    </div>
+    <div class="header-controls">
+      <button class="nav-btn icon-only" id="ovOpenBtn" title="全体を見る">☰ 一覧</button>
+      <div class="font-ctrl">
+        <button id="fsDown">A−</button>
+        <span id="fsLabel">44</span>
+        <button id="fsUp">A+</button>
+      </div>
+    </div>
+  </header>
+
+  <div id="progress"></div>
+
+  <main id="main">
+    <div class="slide" id="slide">
+      <div class="slide-badge" id="slideBadge"></div>
+      <div class="section-tag" id="sectionTag"></div>
+      <div class="action-note" id="actionNote"></div>
+      <div class="line-text" id="lineText"></div>
+      <div class="line-counter" id="lineCounter"></div>
+    </div>
+  </main>
+
+  <footer>
+    <button class="nav-btn" id="prevBtn">← 前へ</button>
+    <button class="nav-btn primary" id="nextBtn">次へ →</button>
+  </footer>
+
+</div>
+
+<div id="overview">
+  <div class="ov-header">
+    <h2>台本 全体一覧（スライド表示）</h2>
+    <button class="close-btn" id="ovCloseBtn">×</button>
+  </div>
+  <div class="ov-grid" id="ovList"></div>
+</div>
+
+<script>
+/* ===== 台本データ ===== */
+const script = [
+  {section:"結果を先に見せる", color:"var(--gyoi)", note:"（画面録画：できあがったリストを見せながら）",
+    text:"旅行の持ち物リスト、\nこれ全部ChatGPTに作ってもらいました。"},
+
+  {section:"困りごと・今日の予告", color:"var(--komarigoto)", note:"",
+    text:"旅行の準備、何を持っていけばいいか迷うこと、ありませんか？\n\n今日はシニアのためのAI活用術、第一弾です。\nChatGPTというAIを使って、旅行の持ち物リストを一瞬で作る方法をお見せします。\n\nでは、実際にやってみましょう。"},
+
+  {section:"手順 前半（アプリを開く〜検索）", color:"var(--tejun)", note:"（Safari→ChatGPT検索→開くまでの操作）",
+    text:"まずはSafariを開きます。青いコンパスのマークですね。\n\n上の検索バーをタップして、シーエイチエーティージーピーティー・ドット・コムと入力します。\n\n検索結果の一番上、ChatGPTが出てきました。これをタップします。"},
+
+  {section:"手順 中盤（ログイン）", color:"var(--tejun)", note:"（無料登録〜ログインまでの操作）",
+    text:"画面中央に、無料で始めるというボタンがあります。これをタップします。\n\n初めての方は新規登録を選びます。Googleのアカウントをお持ちの方は、Googleで続けるが一番早いです。"},
+
+  {section:"手順 後半（質問して結果を見る）", color:"var(--tejun)", note:"（入力〜送信〜結果確認までの操作）",
+    text:"ログインできました。画面下に、文字を打つところがあります。ここをタップします。\n\nここに、こう打ってみます。\n「2泊3日、温泉旅行の持ち物リストを、箇条書きで作ってください」\n\n打ち終わったら、右下の矢印マークをタップします。これが送信ボタンです。\n\n少し待つと、リストが出てきました。上から一緒に見ていきましょう。"},
+
+  {section:"応用の一言", color:"var(--tejun)", note:"（コピー＆メモアプリへの貼り付け操作を見せる）",
+    text:"これ、コピーしてメモアプリに貼っておけますよ。\n\n文字を長押しして、コピーを選んで、メモアプリに貼り付けるだけです。"},
+
+  {section:"注意点", color:"var(--chuui)", note:"",
+    text:"一つだけ、注意点をお伝えします。\n\nChatGPTは、時々間違えることもあります。大事な情報は、他でも確認してください。\n\nそれから、住所や電話番号など、個人情報は入力しないようにしてください。\n\n無料で十分使えますので、まずは気軽に試してみてください。"},
+
+  {section:"コメント募集・次回予告", color:"var(--comment)", note:"",
+    text:"こんな時どう聞けばいいの、という質問があれば、コメントで教えてください。次の動画のネタにさせていただきます。\n\n次回も、シニアのためのAI活用術、続けていきます。\nチャンネル登録、お待ちしています。"}
+];
+
+let idx = 0;
+let fontSize = 28;
+
+const lineText = document.getElementById('lineText');
+const sectionTag = document.getElementById('sectionTag');
+const actionNote = document.getElementById('actionNote');
+const lineCounter = document.getElementById('lineCounter');
+const slideBadge = document.getElementById('slideBadge');
+const progress = document.getElementById('progress');
+const slide = document.getElementById('slide');
+const prevBtn = document.getElementById('prevBtn');
+const nextBtn = document.getElementById('nextBtn');
+const fsLabel = document.getElementById('fsLabel');
+
+function buildProgress(){
+  progress.innerHTML = '';
+  script.forEach((s,i)=>{
+    const d = document.createElement('div');
+    d.className = 'dot';
+    d.style.setProperty('--section-color', s.color);
+    d.addEventListener('click', ()=>{ idx = i; render(); });
+    progress.appendChild(d);
+  });
+}
+
+function render(){
+  const item = script[idx];
+  slide.style.setProperty('--section-color', item.color);
+  sectionTag.style.setProperty('--section-color', item.color);
+  sectionTag.textContent = item.section;
+  actionNote.textContent = item.note || '\u00A0';
+  lineText.textContent = item.text;
+  lineText.style.setProperty('--fs', fontSize + 'px');
+  lineCounter.textContent = (idx+1) + ' / ' + script.length;
+  slideBadge.textContent = 'スライド ' + (idx+1);
+
+  [...progress.children].forEach((d,i)=>{
+    d.classList.toggle('active', i===idx);
+    d.classList.toggle('done', i<idx);
+  });
+
+  prevBtn.disabled = idx === 0;
+  nextBtn.textContent = idx === script.length-1 ? '最初に戻る ↺' : '次へ →';
+}
+
+prevBtn.addEventListener('click', ()=>{
+  if(idx>0){ idx--; render(); }
+});
+nextBtn.addEventListener('click', ()=>{
+  if(idx < script.length-1){ idx++; } else { idx = 0; }
+  render();
+});
+
+document.addEventListener('keydown', (e)=>{
+  if(e.key === 'ArrowRight' || e.key === ' '){ e.preventDefault(); nextBtn.click(); }
+  if(e.key === 'ArrowLeft'){ e.preventDefault(); prevBtn.click(); }
+});
+
+document.getElementById('fsUp').addEventListener('click', ()=>{
+  fontSize = Math.min(fontSize+3, 48);
+  fsLabel.textContent = fontSize;
+  render();
+});
+document.getElementById('fsDown').addEventListener('click', ()=>{
+  fontSize = Math.max(fontSize-3, 18);
+  fsLabel.textContent = fontSize;
+  render();
+});
+fsLabel.textContent = fontSize;
+
+/* ===== 全体一覧 ===== */
+const overview = document.getElementById('overview');
+const ovList = document.getElementById('ovList');
+document.getElementById('ovOpenBtn').addEventListener('click', ()=>{
+  buildOverview();
+  overview.classList.add('show');
+});
+document.getElementById('ovCloseBtn').addEventListener('click', ()=>{
+  overview.classList.remove('show');
+});
+
+function buildOverview(){
+  ovList.innerHTML = '';
+  script.forEach((s,i)=>{
+    const item = document.createElement('div');
+    item.className = 'ov-item';
+    item.style.setProperty('--c', s.color);
+    item.innerHTML = `
+      <div class="ov-num">SLIDE ${i+1} ・ ${s.section}</div>
+      <div class="ov-text">${s.text.replace(/\n/g,' ')}</div>
+      ${s.note ? `<div class="ov-note">${s.note}</div>` : ''}
+    `;
+    item.addEventListener('click', ()=>{
+      idx = i;
+      render();
+      overview.classList.remove('show');
+    });
+    ovList.appendChild(item);
+  });
+}
+
+buildProgress();
+render();
+</script>
+</body>
+</html>
