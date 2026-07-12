@@ -199,20 +199,17 @@ def render_view(name: str):
 
     return f"""<!doctype html><html lang="ja"><head><meta charset="utf-8">
 <title>{html.escape(name)}</title>{PAGE_CSS}</head><body>
-<header>
+<header class="aux">
   <h1>{html.escape(name)}</h1>
-  <div class="aux">
+  <div>
     <a class="btn" href="/">一覧へ</a>
   </div>
 </header>
-<div class="toolbar aux" style="padding:12px 24px 0;">
-  <button onclick="adjust(-4)">A－</button>
-  <button onclick="adjust(4)">A＋</button>
-  <span style="font-size:12px;color:var(--ink-dim);">本文をタップして直接編集できます（触れなくなったら自動保存）</span>
-</div>
 <div class="shoot-bar">
   <button class="primary" id="shootBtn" onclick="toggleShoot()">▶ 撮影開始</button>
   <span class="elapsed" id="elapsed">0:00</span>
+  <button onclick="adjust(-4)">A－</button>
+  <button onclick="adjust(4)">A＋</button>
   <span class="speed aux">速度
     <input type="range" id="speedSlider" min="10" max="250" value="100" step="5"
       oninput="onSpeedInput(this.value)">
@@ -222,7 +219,7 @@ def render_view(name: str):
 </div>
 <main>
   <div class="toc">{toc}</div>
-  <div class="total-time">全体の目安時間：約{format_duration(total_seconds)}（文字数から自動計算、実際の話し方で前後します）</div>
+  <div class="total-time aux">本文をタップして直接編集できます（触れなくなったら自動保存）／全体の目安時間：約{format_duration(total_seconds)}</div>
   {blocks}
 </main>
 <div class="save-flash" id="flash">保存しました</div>
