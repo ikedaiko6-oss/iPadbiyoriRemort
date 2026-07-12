@@ -187,9 +187,15 @@ def render_view(name: str):
     slides = parse_slides(path.read_text(encoding="utf-8"))
     qname = urllib.parse.quote(name)
 
+    def toc_label(i: int, s: str) -> str:
+        label = section_label(s)
+        if label:
+            return label
+        return "タイトル" if i == 0 else str(i + 1)
+
     toc = "".join(
         f'<a href="#s{i}" style="background:{color_for(section_label(s))}">'
-        f'{html.escape(section_label(s)) or f"{i+1}"}</a>'
+        f'{html.escape(toc_label(i, s))}</a>'
         for i, s in enumerate(slides)
     )
 
@@ -198,7 +204,7 @@ def render_view(name: str):
 
     blocks = "".join(
         f'<div class="block" id="s{i}" style="--c:{color_for(section_label(s))}">'
-        f'<div class="section-label">{html.escape(section_label(s)) or "&nbsp;"}'
+        f'<div class="section-label">{html.escape(toc_label(i, s))}'
         f'<span class="time-badge">約{format_duration(durations[i])}</span></div>'
         f'<div class="block-text txt" contenteditable="true" spellcheck="false" '
         f'data-idx="{i}">{html.escape(s)}</div>'
