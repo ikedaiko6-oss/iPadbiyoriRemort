@@ -57,6 +57,7 @@ PAGE_CSS = """
   header h1{font-size:17px;margin:0;font-weight:600;letter-spacing:.02em;}
   header .mark{font-size:11px;color:var(--ink-dim);letter-spacing:.15em;}
   main{padding:32px 24px 60px;max-width:840px;margin:0 auto;}
+  body.script-page main{margin-left:190px;margin-right:auto;}
 
   ul.filelist{list-style:none;padding:0;}
   ul.filelist li{margin-bottom:12px;}
@@ -70,9 +71,17 @@ PAGE_CSS = """
     font-size:14px;cursor:pointer;color:var(--ink);text-decoration:none;font-family:inherit;}
   button.primary{background:var(--accent);color:#fff;border-color:transparent;}
 
-  .toc{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:24px;}
-  .toc a{font-size:12px;padding:5px 12px;border-radius:20px;text-decoration:none;
-    color:#fff;opacity:.85;}
+  .toc{position:fixed;top:64px;left:0;bottom:0;width:170px;
+    display:flex;flex-direction:column;gap:8px;overflow-y:auto;
+    padding:16px 12px;background:var(--paper);border-right:1px solid var(--border);z-index:15;}
+  .toc a{font-size:12px;padding:7px 12px;border-radius:20px;text-decoration:none;
+    color:#fff;opacity:.85;text-align:left;line-height:1.4;}
+
+  @media (max-width:780px){
+    body.script-page main{margin-left:auto;}
+    .toc{position:static;width:auto;height:auto;flex-direction:row;flex-wrap:wrap;
+      padding:0;border-right:none;background:transparent;margin-bottom:24px;}
+  }
 
   .block{margin-bottom:38px;padding-bottom:38px;border-bottom:1px dashed var(--border);}
   .block:last-child{border-bottom:none;}
@@ -114,7 +123,7 @@ PAGE_CSS = """
   body.focus-mode .toc,
   body.focus-mode .total-time{display:none;}
   body.focus-mode .shoot-bar{background:rgba(250,246,239,.92);}
-  body.focus-mode main{padding-top:12px;}
+  body.focus-mode main{padding-top:12px;margin-left:auto;}
 
   @media (max-width:600px){ .slide-text{font-size:calc(var(--fs, 32px) * 0.75);} }
 </style>
@@ -198,7 +207,7 @@ def render_view(name: str):
     )
 
     return f"""<!doctype html><html lang="ja"><head><meta charset="utf-8">
-<title>{html.escape(name)}</title>{PAGE_CSS}</head><body>
+<title>{html.escape(name)}</title>{PAGE_CSS}</head><body class="script-page">
 <header class="aux">
   <h1>{html.escape(name)}</h1>
   <div>
