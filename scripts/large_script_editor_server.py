@@ -78,8 +78,10 @@ PAGE_CSS = """
   .block:last-child{border-bottom:none;}
   .section-label{font-size:13px;color:#fff;background:var(--c);display:inline-block;
     padding:4px 14px;border-radius:20px;letter-spacing:.1em;margin-bottom:16px;}
-  .time-badge{font-size:12px;color:var(--ink-dim);margin-left:10px;letter-spacing:.05em;}
-  .total-time{font-size:13px;color:var(--ink-dim);margin-bottom:18px;}
+  .time-badge{font-size:14px;font-weight:700;color:var(--ink);background:#fff;
+    margin-left:10px;letter-spacing:.03em;padding:2px 10px;border-radius:12px;
+    border:1px solid var(--c);}
+  .total-time{font-size:15px;font-weight:700;color:var(--ink);margin-bottom:18px;}
   .block-text{font-size:var(--fs,30px);line-height:2;white-space:pre-wrap;
     letter-spacing:.02em;border-left:8px solid var(--c);padding:2% 4%;background:#fff;
     border-radius:4px;box-shadow:0 3px 14px rgba(43,38,32,.06);
