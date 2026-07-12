@@ -99,6 +99,8 @@ PAGE_CSS = """
   .shoot-bar button{font-weight:700;}
   .shoot-bar .elapsed{font-size:20px;font-weight:700;font-variant-numeric:tabular-nums;
     color:var(--accent);min-width:64px;}
+  body.paused .shoot-bar .elapsed{color:var(--ink-dim);}
+  body.shooting main{cursor:pointer;}
   .shoot-bar .speed{font-size:13px;color:var(--ink-dim);}
 
   .block{transition:opacity .25s;}
@@ -251,25 +253,35 @@ document.querySelectorAll('.block-text').forEach(el => {{
 
 /* ===== 撮影サポート：自動スクロール＋経過時間タイマー ===== */
 let shooting = false;
+let paused = false;
 let elapsedSec = 0;
 let timerId = null;
 let scrollId = null;
-const speedSteps = [0.5, 0.75, 1, 1.25, 1.5, 2];
-let speedIdx = 2;
-const speedLabels = ["とても遅い", "遅い", "標準", "やや速い", "速い", "とても速い"];
+let lastFrameTime = null;
+const speedSteps = [0.1, 0.2, 0.35, 0.5, 0.75, 1, 1.25, 1.5, 2];
+let speedIdx = 5;
+const speedLabels = ["超スロー", "かなり遅い", "遅い", "やや遅い", "少し遅い", "標準", "やや速い", "速い", "とても速い"];
 
 function updateElapsedDisplay(){{
   const m = Math.floor(elapsedSec / 60), s = elapsedSec % 60;
   document.getElementById('elapsed').textContent = m + ':' + String(s).padStart(2, '0');
 }}
 
+function setBlocksEditable(editable){{
+  document.querySelectorAll('.block-text').forEach(el => {{
+    el.setAttribute('contenteditable', editable ? 'true' : 'false');
+  }});
+}}
+
 function toggleShoot(){{
   shooting = !shooting;
+  paused = false;
   const btn = document.getElementById('shootBtn');
   document.body.classList.toggle('shooting', shooting);
+  setBlocksEditable(!shooting);
   if (shooting){{
     btn.textContent = '■ 停止';
-    timerId = setInterval(() => {{ elapsedSec++; updateElapsedDisplay(); }}, 1000);
+    timerId = setInterval(() => {{ if (!paused){{ elapsedSec++; updateElapsedDisplay(); }} }}, 1000);
     startAutoScroll();
   }} else {{
     btn.textContent = '▶ 撮影開始';
@@ -278,16 +290,27 @@ function toggleShoot(){{
   }}
 }}
 
+function togglePause(){{
+  if (!shooting) return;
+  paused = !paused;
+  document.body.classList.toggle('paused', paused);
+  lastFrameTime = null; // 再開時にジャンプしないようリセット
+}}
+
 function startAutoScroll(){{
   // 本文の総文字数 ÷ 目安時間 から、1秒あたりに進めるべきスクロール量を概算する
   const doc = document.documentElement;
   const scrollable = doc.scrollHeight - window.innerHeight;
   const pxPerSecond = totalSeconds > 0 ? (scrollable / totalSeconds) : 0;
-  let last = performance.now();
   function step(now){{
     if (!shooting) return;
-    const dt = (now - last) / 1000;
-    last = now;
+    if (paused || lastFrameTime === null){{
+      lastFrameTime = now;
+      scrollId = requestAnimationFrame(step);
+      return;
+    }}
+    const dt = (now - lastFrameTime) / 1000;
+    lastFrameTime = now;
     window.scrollBy(0, pxPerSecond * speedSteps[speedIdx] * dt);
     scrollId = requestAnimationFrame(step);
   }}
@@ -302,6 +325,13 @@ function changeSpeed(d){{
 function toggleFocus(){{
   document.body.classList.toggle('focus-mode');
 }}
+
+// 撮影中は、画面（本文エリア）をタップ／クリックすると一時停止・再開できる
+document.addEventListener('click', (e) => {{
+  if (!shooting) return;
+  if (e.target.closest('.shoot-bar') || e.target.closest('header')) return;
+  togglePause();
+}});
 
 /* 今どのセクションを読んでいるかを画面中央付近の要素から判定して強調する */
 const blocks = Array.from(document.querySelectorAll('.block'));
