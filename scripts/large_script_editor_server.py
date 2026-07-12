@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-大きい文字の台本ビューア／エディタ（ローカル専用サーバー）
+大きい文字の台本ビューア／エディタ（ローカル専用サーバー・シンちゃん版）
 
-03_台本/ 内の .txt を、大きい文字のスライド風テレプロンプターとして
+03_台本/ 内の .txt を、大きい文字のテレプロンプターとして
 ブラウザ（127.0.0.1）に表示する。編集して保存もできる。
 
 外部公開はしない。127.0.0.1 のみでLISTENする。
@@ -12,6 +12,7 @@ import socketserver
 import urllib.parse
 import pathlib
 import html
+import re
 import webbrowser
 import sys
 
@@ -19,32 +20,71 @@ PORT = 8801
 BASE_DIR = pathlib.Path(__file__).resolve().parent.parent
 SCRIPT_DIR = BASE_DIR / "03_台本"
 
+# セクション名のキーワード→色（縦帯・進捗ドットに使う）
+SECTION_COLORS = [
+    (("結果",), "#c9714e"),   # 結果を先に見せる：テラコッタ
+    (("困りごと", "予告"), "#5b7fa6"),   # 困りごと：ブルーグレー
+    (("手順",), "#7a9463"),   # 手順：グリーン
+    (("応用",), "#9b7fb0"),   # 応用：パープル
+    (("注意",), "#c24545"),   # 注意点：レッド
+    (("コメント", "次回"), "#c9a13a"),   # コメント募集：ゴールド
+]
+DEFAULT_COLOR = "#9a9284"
+
+
+def color_for(section_label: str) -> str:
+    for keywords, color in SECTION_COLORS:
+        if any(k in section_label for k in keywords):
+            return color
+    return DEFAULT_COLOR
+
+
 PAGE_CSS = """
 <style>
-  :root{--ink:#1e222a;--ink-dim:#8a8f98;--panel:#f4f5f7;--border:#e3e5e9;--accent:#4a7dfc;}
+  :root{
+    --paper:#faf6ef; --ink:#2b2620; --ink-dim:#8d8375;
+    --border:#e6ddcc; --accent:#c9714e;
+  }
   *{box-sizing:border-box;}
-  body{margin:0;font-family:-apple-system,"Hiragino Sans",sans-serif;background:var(--panel);color:var(--ink);}
-  header{padding:16px 24px;background:#fff;border-bottom:1px solid var(--border);
-    display:flex;justify-content:space-between;align-items:center;}
-  header h1{font-size:16px;margin:0;}
-  main{padding:24px;max-width:900px;margin:0 auto;}
+  body{margin:0;background:var(--paper);color:var(--ink);
+    font-family:"Hiragino Mincho ProN","Yu Mincho",serif;}
+  header{padding:20px 28px;background:var(--paper);border-bottom:2px solid var(--border);
+    display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;}
+  header h1{font-size:17px;margin:0;font-weight:600;letter-spacing:.02em;}
+  header .mark{font-size:11px;color:var(--ink-dim);letter-spacing:.15em;}
+  main{padding:32px 24px 60px;max-width:840px;margin:0 auto;}
+
   ul.filelist{list-style:none;padding:0;}
-  ul.filelist li{margin-bottom:10px;}
-  ul.filelist a{display:block;padding:14px 18px;background:#fff;border:1px solid var(--border);
-    border-radius:8px;text-decoration:none;color:var(--ink);font-size:15px;}
-  ul.filelist a:hover{border-color:var(--accent);}
-  .slide{background:#fff;border-top:8px solid var(--accent);border-radius:10px;
-    padding:6% 8%;min-height:60vh;display:flex;align-items:center;justify-content:center;
-    box-shadow:0 2px 10px rgba(0,0,0,.06);margin-bottom:20px;}
-  .slide-text{font-size:var(--fs,32px);line-height:1.8;white-space:pre-wrap;font-weight:600;}
-  .toolbar{display:flex;gap:10px;align-items:center;margin-bottom:16px;flex-wrap:wrap;}
-  button, .btn{background:#fff;border:1px solid var(--border);padding:10px 18px;border-radius:8px;
-    font-size:14px;cursor:pointer;color:var(--ink);text-decoration:none;}
+  ul.filelist li{margin-bottom:12px;}
+  ul.filelist a{display:block;padding:18px 22px;background:#fff;border:1px solid var(--border);
+    border-left:6px solid var(--accent);border-radius:4px;text-decoration:none;
+    color:var(--ink);font-size:16px;transition:transform .12s;}
+  ul.filelist a:hover{transform:translateX(4px);}
+
+  .toolbar{display:flex;gap:10px;align-items:center;margin-bottom:20px;flex-wrap:wrap;}
+  button, .btn{background:#fff;border:1px solid var(--border);padding:10px 20px;border-radius:4px;
+    font-size:14px;cursor:pointer;color:var(--ink);text-decoration:none;font-family:inherit;}
   button.primary{background:var(--accent);color:#fff;border-color:transparent;}
-  .nav{display:flex;gap:10px;justify-content:center;margin-top:16px;}
-  textarea{width:100%;min-height:60vh;font-size:16px;line-height:1.7;padding:16px;
-    border:1px solid var(--border);border-radius:8px;font-family:inherit;}
-  .slide-index{font-size:12px;color:var(--ink-dim);text-align:center;margin-bottom:8px;}
+
+  .dots{display:flex;gap:7px;justify-content:center;margin-bottom:22px;}
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--border);}
+  .dot.active{background:var(--accent);width:22px;border-radius:5px;}
+
+  .section-label{text-align:center;font-size:13px;color:var(--ink-dim);
+    letter-spacing:.1em;margin-bottom:10px;}
+  .slide{background:#fff;border-left:10px solid var(--accent);border-radius:4px;
+    padding:7% 9%;min-height:56vh;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 3px 14px rgba(43,38,32,.08);margin-bottom:24px;}
+  .slide-text{font-size:var(--fs,32px);line-height:1.95;white-space:pre-wrap;
+    letter-spacing:.02em;}
+
+  .nav{display:flex;gap:12px;justify-content:center;margin-top:8px;}
+  .nav .btn{padding:14px 30px;font-size:15px;}
+
+  textarea{width:100%;min-height:56vh;font-size:16px;line-height:1.8;padding:18px;
+    border:1px solid var(--border);border-radius:4px;font-family:inherit;background:#fff;}
+
+  @media (max-width:600px){ .slide-text{font-size:calc(var(--fs, 32px) * 0.75);} }
 </style>
 """
 
@@ -52,6 +92,11 @@ PAGE_CSS = """
 def parse_slides(text: str):
     blocks = [b.strip() for b in text.split("---") if b.strip()]
     return blocks if blocks else [text]
+
+
+def section_label(slide_text: str) -> str:
+    m = re.match(r"^【(.+?)】", slide_text)
+    return m.group(1) if m else ""
 
 
 def list_files():
@@ -68,8 +113,8 @@ def render_index():
     if not items:
         items = "<li>03_台本/ に .txt がありません</li>"
     return f"""<!doctype html><html lang="ja"><head><meta charset="utf-8">
-<title>台本一覧</title>{PAGE_CSS}</head><body>
-<header><h1>台本 大きい文字ビューア</h1></header>
+<title>台本 大きい文字（シンちゃん版）</title>{PAGE_CSS}</head><body>
+<header><h1>台本 大きい文字ビューア</h1><span class="mark">シンちゃん版</span></header>
 <main><ul class="filelist">{items}</ul></main>
 </body></html>"""
 
@@ -80,12 +125,22 @@ def render_view(name: str, idx: int):
         return "<h1>ファイルが見つかりません</h1>"
     slides = parse_slides(path.read_text(encoding="utf-8"))
     idx = max(0, min(idx, len(slides) - 1))
+    label = section_label(slides[idx])
+    accent = color_for(label)
     body = html.escape(slides[idx])
     qname = urllib.parse.quote(name)
     prev_disabled = "disabled" if idx == 0 else ""
     next_disabled = "disabled" if idx == len(slides) - 1 else ""
+
+    dots = "".join(
+        f'<a class="dot{" active" if i == idx else ""}" '
+        f'style="background:{color_for(section_label(s)) if i == idx else "var(--border)"}" '
+        f'href="/view?file={qname}&idx={i}"></a>'
+        for i, s in enumerate(slides)
+    )
+
     return f"""<!doctype html><html lang="ja"><head><meta charset="utf-8">
-<title>{html.escape(name)}</title>{PAGE_CSS}</head><body>
+<title>{html.escape(name)}</title>{PAGE_CSS}</head><body style="--accent:{accent}">
 <header>
   <h1>{html.escape(name)}</h1>
   <div>
@@ -95,10 +150,11 @@ def render_view(name: str, idx: int):
 </header>
 <main>
   <div class="toolbar">
-    <button onclick="adjust(-4)">A-</button>
-    <button onclick="adjust(4)">A+</button>
+    <button onclick="adjust(-4)">A－</button>
+    <button onclick="adjust(4)">A＋</button>
   </div>
-  <div class="slide-index">{idx+1} / {len(slides)}</div>
+  <div class="dots">{dots}</div>
+  <div class="section-label">{html.escape(label) or "&nbsp;"}（{idx+1} / {len(slides)}）</div>
   <div class="slide"><div class="slide-text" id="txt" style="--fs:32px">{body}</div></div>
   <div class="nav">
     <a class="btn" {prev_disabled} href="/view?file={qname}&idx={idx-1}">← 前へ</a>
@@ -112,9 +168,8 @@ function adjust(d){{
   document.getElementById('txt').style.setProperty('--fs', fs + 'px');
 }}
 document.addEventListener('keydown', (e) => {{
-  if (e.key === 'ArrowRight' || e.key === ' ') {{
-    document.querySelector('.nav-btn-next')?.click();
-  }}
+  if (e.key === 'ArrowRight' || e.key === ' ') location.href = "/view?file={qname}&idx={idx+1}";
+  if (e.key === 'ArrowLeft') location.href = "/view?file={qname}&idx={idx-1}";
 }});
 </script>
 </body></html>"""
@@ -188,7 +243,7 @@ def main():
     with socketserver.TCPServer(("127.0.0.1", PORT), Handler) as httpd:
         url = f"http://127.0.0.1:{PORT}/"
         webbrowser.open(url)
-        print(f"台本ビューア起動: {url}  (Ctrl+Cで終了)")
+        print(f"台本ビューア（シンちゃん版）起動: {url}  (Ctrl+Cで終了)")
         try:
             httpd.serve_forever()
         except KeyboardInterrupt:
