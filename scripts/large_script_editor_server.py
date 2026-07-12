@@ -71,7 +71,7 @@ PAGE_CSS = """
     font-size:14px;cursor:pointer;color:var(--ink);text-decoration:none;font-family:inherit;}
   button.primary{background:var(--accent);color:#fff;border-color:transparent;}
 
-  .toc{position:fixed;top:64px;left:0;bottom:0;width:170px;
+  .toc{position:fixed;top:var(--bar-h, 64px);left:0;bottom:0;width:170px;
     display:flex;flex-direction:column;gap:8px;overflow-y:auto;
     padding:16px 12px;background:var(--paper);border-right:1px solid var(--border);z-index:15;}
   .toc a{font-size:12px;padding:7px 12px;border-radius:20px;text-decoration:none;
@@ -238,6 +238,15 @@ function adjust(d){{
   fs = Math.max(18, Math.min(56, fs + d));
   document.querySelectorAll('.txt').forEach(el => el.style.setProperty('--fs', fs + 'px'));
 }}
+
+// 撮影バーの実際の高さを測って目次の開始位置に反映する（見切れ防止）
+function syncBarHeight(){{
+  const bar = document.querySelector('.shoot-bar');
+  if (bar) document.documentElement.style.setProperty('--bar-h', bar.offsetHeight + 'px');
+}}
+syncBarHeight();
+window.addEventListener('resize', syncBarHeight);
+new ResizeObserver(syncBarHeight).observe(document.querySelector('.shoot-bar'));
 
 const totalSeconds = {total_seconds};
 const fileName = {name!r};
