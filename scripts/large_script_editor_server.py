@@ -101,7 +101,9 @@ PAGE_CSS = """
     color:var(--accent);min-width:64px;}
   body.paused .shoot-bar .elapsed{color:var(--ink-dim);}
   body.shooting main{cursor:pointer;}
-  .shoot-bar .speed{font-size:13px;color:var(--ink-dim);}
+  .shoot-bar .speed{font-size:13px;color:var(--ink-dim);display:flex;align-items:center;gap:8px;}
+  .shoot-bar .speed input[type=range]{width:130px;vertical-align:middle;}
+  .shoot-bar .speed #speedLabel{font-variant-numeric:tabular-nums;min-width:42px;display:inline-block;}
 
   .block{transition:opacity .25s;}
   body.shooting .block:not(.current){opacity:.35;}
@@ -211,10 +213,10 @@ def render_view(name: str):
 <div class="shoot-bar">
   <button class="primary" id="shootBtn" onclick="toggleShoot()">▶ 撮影開始</button>
   <span class="elapsed" id="elapsed">0:00</span>
-  <span class="speed aux">自動スクロール速度：
-    <button onclick="changeSpeed(-1)">－</button>
-    <span id="speedLabel">標準</span>
-    <button onclick="changeSpeed(1)">＋</button>
+  <span class="speed aux">速度
+    <input type="range" id="speedSlider" min="10" max="250" value="100" step="5"
+      oninput="onSpeedInput(this.value)">
+    <span id="speedLabel">100%</span>
   </span>
   <button onclick="toggleFocus()">集中モード</button>
 </div>
@@ -258,9 +260,7 @@ let elapsedSec = 0;
 let timerId = null;
 let scrollId = null;
 let lastFrameTime = null;
-const speedSteps = [0.1, 0.2, 0.35, 0.5, 0.75, 1, 1.25, 1.5, 2];
-let speedIdx = 5;
-const speedLabels = ["超スロー", "かなり遅い", "遅い", "やや遅い", "少し遅い", "標準", "やや速い", "速い", "とても速い"];
+let speedMultiplier = 1.0; // スライダー(10%〜250%)からそのまま算出
 
 function updateElapsedDisplay(){{
   const m = Math.floor(elapsedSec / 60), s = elapsedSec % 60;
@@ -311,15 +311,15 @@ function startAutoScroll(){{
     }}
     const dt = (now - lastFrameTime) / 1000;
     lastFrameTime = now;
-    window.scrollBy(0, pxPerSecond * speedSteps[speedIdx] * dt);
+    window.scrollBy(0, pxPerSecond * speedMultiplier * dt);
     scrollId = requestAnimationFrame(step);
   }}
   scrollId = requestAnimationFrame(step);
 }}
 
-function changeSpeed(d){{
-  speedIdx = Math.max(0, Math.min(speedSteps.length - 1, speedIdx + d));
-  document.getElementById('speedLabel').textContent = speedLabels[speedIdx];
+function onSpeedInput(value){{
+  speedMultiplier = value / 100;
+  document.getElementById('speedLabel').textContent = value + '%';
 }}
 
 function toggleFocus(){{
