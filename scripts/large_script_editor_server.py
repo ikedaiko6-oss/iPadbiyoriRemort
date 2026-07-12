@@ -66,20 +66,17 @@ PAGE_CSS = """
     font-size:14px;cursor:pointer;color:var(--ink);text-decoration:none;font-family:inherit;}
   button.primary{background:var(--accent);color:#fff;border-color:transparent;}
 
-  .dots{display:flex;gap:7px;justify-content:center;margin-bottom:22px;}
-  .dot{width:9px;height:9px;border-radius:50%;background:var(--border);}
-  .dot.active{background:var(--accent);width:22px;border-radius:5px;}
+  .toc{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:24px;}
+  .toc a{font-size:12px;padding:5px 12px;border-radius:20px;text-decoration:none;
+    color:#fff;opacity:.85;}
 
-  .section-label{text-align:center;font-size:13px;color:var(--ink-dim);
-    letter-spacing:.1em;margin-bottom:10px;}
-  .slide{background:#fff;border-left:10px solid var(--accent);border-radius:4px;
-    padding:7% 9%;min-height:56vh;display:flex;align-items:center;justify-content:center;
-    box-shadow:0 3px 14px rgba(43,38,32,.08);margin-bottom:24px;}
-  .slide-text{font-size:var(--fs,32px);line-height:1.95;white-space:pre-wrap;
-    letter-spacing:.02em;}
-
-  .nav{display:flex;gap:12px;justify-content:center;margin-top:8px;}
-  .nav .btn{padding:14px 30px;font-size:15px;}
+  .block{margin-bottom:38px;padding-bottom:38px;border-bottom:1px dashed var(--border);}
+  .block:last-child{border-bottom:none;}
+  .section-label{font-size:13px;color:#fff;background:var(--c);display:inline-block;
+    padding:4px 14px;border-radius:20px;letter-spacing:.1em;margin-bottom:16px;}
+  .block-text{font-size:var(--fs,30px);line-height:2;white-space:pre-wrap;
+    letter-spacing:.02em;border-left:8px solid var(--c);padding:2% 4%;background:#fff;
+    border-radius:4px;box-shadow:0 3px 14px rgba(43,38,32,.06);}
 
   textarea{width:100%;min-height:56vh;font-size:16px;line-height:1.8;padding:18px;
     border:1px solid var(--border);border-radius:4px;font-family:inherit;background:#fff;}
@@ -119,28 +116,33 @@ def render_index():
 </body></html>"""
 
 
-def render_view(name: str, idx: int):
+def render_view(name: str):
+    """
+    全スライドを1本の縦スクロールで表示する。
+    iPadで操作しながら喋る用途なので、Mac側のクリック操作を発生させない。
+    """
     path = SCRIPT_DIR / name
     if not path.exists():
         return "<h1>ファイルが見つかりません</h1>"
     slides = parse_slides(path.read_text(encoding="utf-8"))
-    idx = max(0, min(idx, len(slides) - 1))
-    label = section_label(slides[idx])
-    accent = color_for(label)
-    body = html.escape(slides[idx])
     qname = urllib.parse.quote(name)
-    prev_disabled = "disabled" if idx == 0 else ""
-    next_disabled = "disabled" if idx == len(slides) - 1 else ""
 
-    dots = "".join(
-        f'<a class="dot{" active" if i == idx else ""}" '
-        f'style="background:{color_for(section_label(s)) if i == idx else "var(--border)"}" '
-        f'href="/view?file={qname}&idx={i}"></a>'
+    toc = "".join(
+        f'<a href="#s{i}" style="background:{color_for(section_label(s))}">'
+        f'{html.escape(section_label(s)) or f"{i+1}"}</a>'
+        for i, s in enumerate(slides)
+    )
+
+    blocks = "".join(
+        f'<div class="block" id="s{i}" style="--c:{color_for(section_label(s))}">'
+        f'<div class="section-label">{html.escape(section_label(s)) or "&nbsp;"}</div>'
+        f'<div class="block-text txt">{html.escape(s)}</div>'
+        f'</div>'
         for i, s in enumerate(slides)
     )
 
     return f"""<!doctype html><html lang="ja"><head><meta charset="utf-8">
-<title>{html.escape(name)}</title>{PAGE_CSS}</head><body style="--accent:{accent}">
+<title>{html.escape(name)}</title>{PAGE_CSS}</head><body>
 <header>
   <h1>{html.escape(name)}</h1>
   <div>
@@ -153,24 +155,15 @@ def render_view(name: str, idx: int):
     <button onclick="adjust(-4)">A－</button>
     <button onclick="adjust(4)">A＋</button>
   </div>
-  <div class="dots">{dots}</div>
-  <div class="section-label">{html.escape(label) or "&nbsp;"}（{idx+1} / {len(slides)}）</div>
-  <div class="slide"><div class="slide-text" id="txt" style="--fs:32px">{body}</div></div>
-  <div class="nav">
-    <a class="btn" {prev_disabled} href="/view?file={qname}&idx={idx-1}">← 前へ</a>
-    <a class="btn primary" {next_disabled} href="/view?file={qname}&idx={idx+1}">次へ →</a>
-  </div>
+  <div class="toc">{toc}</div>
+  {blocks}
 </main>
 <script>
-let fs = 32;
+let fs = 30;
 function adjust(d){{
   fs = Math.max(18, Math.min(56, fs + d));
-  document.getElementById('txt').style.setProperty('--fs', fs + 'px');
+  document.querySelectorAll('.txt').forEach(el => el.style.setProperty('--fs', fs + 'px'));
 }}
-document.addEventListener('keydown', (e) => {{
-  if (e.key === 'ArrowRight' || e.key === ' ') location.href = "/view?file={qname}&idx={idx+1}";
-  if (e.key === 'ArrowLeft') location.href = "/view?file={qname}&idx={idx-1}";
-}});
 </script>
 </body></html>"""
 
@@ -209,8 +202,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self._send_html(render_index())
         elif parsed.path == "/view":
             name = qs.get("file", [""])[0]
-            idx = int(qs.get("idx", ["0"])[0])
-            self._send_html(render_view(name, idx))
+            self._send_html(render_view(name))
         elif parsed.path == "/edit":
             name = qs.get("file", [""])[0]
             self._send_html(render_edit(name))
