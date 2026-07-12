@@ -302,6 +302,7 @@ function startAutoScroll(){{
   const doc = document.documentElement;
   const scrollable = doc.scrollHeight - window.innerHeight;
   const pxPerSecond = totalSeconds > 0 ? (scrollable / totalSeconds) : 0;
+  let scrollAccum = 0; // 1px未満の端数はブラウザに切り捨てられるので、次のフレームに繰り越す
   function step(now){{
     if (!shooting) return;
     if (paused || lastFrameTime === null){{
@@ -311,7 +312,12 @@ function startAutoScroll(){{
     }}
     const dt = (now - lastFrameTime) / 1000;
     lastFrameTime = now;
-    window.scrollBy(0, pxPerSecond * speedMultiplier * dt);
+    scrollAccum += pxPerSecond * speedMultiplier * dt;
+    const move = Math.floor(scrollAccum);
+    if (move >= 1){{
+      window.scrollBy(0, move);
+      scrollAccum -= move;
+    }}
     scrollId = requestAnimationFrame(step);
   }}
   scrollId = requestAnimationFrame(step);
