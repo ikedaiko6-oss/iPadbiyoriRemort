@@ -76,10 +76,13 @@ PAGE_CSS = """
     padding:4px 14px;border-radius:20px;letter-spacing:.1em;margin-bottom:16px;}
   .block-text{font-size:var(--fs,30px);line-height:2;white-space:pre-wrap;
     letter-spacing:.02em;border-left:8px solid var(--c);padding:2% 4%;background:#fff;
-    border-radius:4px;box-shadow:0 3px 14px rgba(43,38,32,.06);}
-
-  textarea{width:100%;min-height:56vh;font-size:16px;line-height:1.8;padding:18px;
-    border:1px solid var(--border);border-radius:4px;font-family:inherit;background:#fff;}
+    border-radius:4px;box-shadow:0 3px 14px rgba(43,38,32,.06);
+    outline:none;cursor:text;}
+  .block-text:focus{box-shadow:0 0 0 2px var(--c);}
+  .save-flash{position:fixed;bottom:24px;right:24px;background:#3f6b3f;color:#fff;
+    padding:10px 20px;border-radius:20px;font-size:13px;opacity:0;transition:opacity .3s;
+    pointer-events:none;}
+  .save-flash.show{opacity:1;}
 
   @media (max-width:600px){ .slide-text{font-size:calc(var(--fs, 32px) * 0.75);} }
 </style>
@@ -136,7 +139,8 @@ def render_view(name: str):
     blocks = "".join(
         f'<div class="block" id="s{i}" style="--c:{color_for(section_label(s))}">'
         f'<div class="section-label">{html.escape(section_label(s)) or "&nbsp;"}</div>'
-        f'<div class="block-text txt">{html.escape(s)}</div>'
+        f'<div class="block-text txt" contenteditable="true" spellcheck="false" '
+        f'data-idx="{i}">{html.escape(s)}</div>'
         f'</div>'
         for i, s in enumerate(slides)
     )
@@ -147,42 +151,44 @@ def render_view(name: str):
   <h1>{html.escape(name)}</h1>
   <div>
     <a class="btn" href="/">一覧へ</a>
-    <a class="btn" href="/edit?file={qname}">編集</a>
   </div>
 </header>
 <main>
   <div class="toolbar">
     <button onclick="adjust(-4)">A－</button>
     <button onclick="adjust(4)">A＋</button>
+    <span style="font-size:12px;color:var(--ink-dim);">本文をタップして直接編集できます（触れなくなったら自動保存）</span>
   </div>
   <div class="toc">{toc}</div>
   {blocks}
 </main>
+<div class="save-flash" id="flash">保存しました</div>
 <script>
 let fs = 30;
 function adjust(d){{
   fs = Math.max(18, Math.min(56, fs + d));
   document.querySelectorAll('.txt').forEach(el => el.style.setProperty('--fs', fs + 'px'));
 }}
+
+const fileName = {name!r};
+document.querySelectorAll('.block-text').forEach(el => {{
+  let original = el.innerText;
+  el.addEventListener('blur', () => {{
+    const text = el.innerText;
+    if (text === original) return;
+    original = text;
+    fetch('/save-block?file=' + encodeURIComponent(fileName) + '&idx=' + el.dataset.idx, {{
+      method: 'POST',
+      headers: {{'Content-Type': 'text/plain; charset=utf-8'}},
+      body: text
+    }}).then(() => {{
+      const flash = document.getElementById('flash');
+      flash.classList.add('show');
+      setTimeout(() => flash.classList.remove('show'), 1200);
+    }});
+  }});
+}});
 </script>
-</body></html>"""
-
-
-def render_edit(name: str):
-    path = SCRIPT_DIR / name
-    content = path.read_text(encoding="utf-8") if path.exists() else ""
-    qname = urllib.parse.quote(name)
-    return f"""<!doctype html><html lang="ja"><head><meta charset="utf-8">
-<title>編集: {html.escape(name)}</title>{PAGE_CSS}</head><body>
-<header><h1>編集: {html.escape(name)}</h1>
-  <a class="btn" href="/view?file={qname}">表示に戻る</a>
-</header>
-<main>
-  <form method="post" action="/save?file={qname}">
-    <textarea name="content">{html.escape(content)}</textarea><br><br>
-    <button class="primary" type="submit">保存</button>
-  </form>
-</main>
 </body></html>"""
 
 
@@ -203,26 +209,26 @@ class Handler(http.server.BaseHTTPRequestHandler):
         elif parsed.path == "/view":
             name = qs.get("file", [""])[0]
             self._send_html(render_view(name))
-        elif parsed.path == "/edit":
-            name = qs.get("file", [""])[0]
-            self._send_html(render_edit(name))
         else:
             self._send_html("<h1>404</h1>", 404)
 
     def do_POST(self):
         parsed = urllib.parse.urlparse(self.path)
         qs = urllib.parse.parse_qs(parsed.query)
-        if parsed.path == "/save":
+        if parsed.path == "/save-block":
             name = qs.get("file", [""])[0]
+            idx = int(qs.get("idx", ["-1"])[0])
             length = int(self.headers.get("Content-Length", 0))
-            body = self.rfile.read(length).decode("utf-8")
-            form = urllib.parse.parse_qs(body)
-            content = form.get("content", [""])[0]
+            new_text = self.rfile.read(length).decode("utf-8").strip()
+
             path = SCRIPT_DIR / name
-            path.write_text(content, encoding="utf-8")
-            self.send_response(303)
-            self.send_header("Location", f"/view?file={urllib.parse.quote(name)}")
-            self.end_headers()
+            slides = parse_slides(path.read_text(encoding="utf-8")) if path.exists() else []
+            if 0 <= idx < len(slides):
+                slides[idx] = new_text
+                path.write_text("\n\n---\n\n".join(slides) + "\n", encoding="utf-8")
+                self._send_html("ok")
+            else:
+                self._send_html("bad index", 400)
         else:
             self._send_html("<h1>404</h1>", 404)
 
