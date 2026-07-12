@@ -259,7 +259,7 @@ def render_view(name: str):
   <div class="total-time aux">本文をタップして直接編集できます（触れなくなったら自動保存）／全体の目安時間：約{format_duration(total_seconds)}</div>
   <div class="target-box aux">
     目標の尺：
-    <input type="number" id="targetMin" min="0.5" step="0.5" placeholder="例：17">分
+    <input type="number" id="targetMin" min="0.5" step="0.5" placeholder="例：8.5">分
     <span id="targetInfo"></span>
   </div>
   {blocks}
