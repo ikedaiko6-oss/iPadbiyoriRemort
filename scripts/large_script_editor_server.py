@@ -15,7 +15,7 @@ import html
 import webbrowser
 import sys
 
-PORT = 8765
+PORT = 8766
 BASE_DIR = pathlib.Path(__file__).resolve().parent.parent
 SCRIPT_DIR = BASE_DIR / "03_台本"
 
