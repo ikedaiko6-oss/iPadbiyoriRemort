@@ -90,7 +90,15 @@ PAGE_CSS = """
   .time-badge{font-size:14px;font-weight:700;color:var(--ink);background:#fff;
     margin-left:10px;letter-spacing:.03em;padding:2px 10px;border-radius:12px;
     border:1px solid var(--c);}
-  .total-time{font-size:15px;font-weight:700;color:var(--ink);margin-bottom:18px;}
+  .delta-badge{font-size:13px;font-weight:700;margin-left:8px;letter-spacing:.02em;}
+  .delta-badge.over{color:#3f6b3f;}
+  .delta-badge.under{color:#c24545;}
+  .total-time{font-size:15px;font-weight:700;color:var(--ink);margin-bottom:8px;}
+  .target-box{font-size:14px;color:var(--ink);margin-bottom:18px;
+    display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+  .target-box input{width:70px;padding:6px 10px;border:1px solid var(--border);
+    border-radius:4px;font-family:inherit;font-size:14px;}
+  .target-box #targetInfo{font-weight:700;}
   .block-text{font-size:var(--fs,30px);line-height:2;white-space:pre-wrap;
     letter-spacing:.02em;border-left:8px solid var(--c);padding:2% 4%;background:#fff;
     border-radius:4px;box-shadow:0 3px 14px rgba(43,38,32,.06);
@@ -101,8 +109,12 @@ PAGE_CSS = """
     pointer-events:none;}
   .save-flash.show{opacity:1;}
 
+  /* 進捗バー（画面最上部・常時表示） */
+  .progress-bar{position:sticky;top:0;z-index:21;height:4px;background:var(--border);}
+  .progress-fill{height:100%;width:0%;background:var(--accent);transition:width .3s linear;}
+
   /* 撮影バー */
-  .shoot-bar{position:sticky;top:0;z-index:20;background:var(--paper);
+  .shoot-bar{position:sticky;top:4px;z-index:20;background:var(--paper);
     border-bottom:2px solid var(--border);padding:12px 24px;
     display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
   .shoot-bar button{font-weight:700;}
@@ -126,6 +138,11 @@ PAGE_CSS = """
   body.focus-mode main{padding-top:12px;margin-left:auto;}
 
   @media (max-width:600px){ .slide-text{font-size:calc(var(--fs, 32px) * 0.75);} }
+
+  .countdown{position:fixed;inset:0;z-index:50;background:rgba(43,38,32,.75);
+    display:none;align-items:center;justify-content:center;
+    font-size:120px;font-weight:700;color:#fff;}
+  .countdown.show{display:flex;}
 </style>
 """
 
@@ -203,14 +220,16 @@ def render_view(name: str):
     total_seconds = sum(durations)
 
     blocks = "".join(
-        f'<div class="block" id="s{i}" style="--c:{color_for(section_label(s))}">'
+        f'<div class="block" id="s{i}" data-duration="{durations[i]}" style="--c:{color_for(section_label(s))}">'
         f'<div class="section-label">{html.escape(toc_label(i, s))}'
-        f'<span class="time-badge">約{format_duration(durations[i])}</span></div>'
+        f'<span class="time-badge">約{format_duration(durations[i])}</span>'
+        f'<span class="delta-badge" id="delta{i}"></span></div>'
         f'<div class="block-text txt" contenteditable="true" spellcheck="false" '
         f'data-idx="{i}">{html.escape(s)}</div>'
         f'</div>'
         for i, s in enumerate(slides)
     )
+    block_count = len(slides)
 
     return f"""<!doctype html><html lang="ja"><head><meta charset="utf-8">
 <title>{html.escape(name)}</title>{PAGE_CSS}</head><body class="script-page">
@@ -220,9 +239,11 @@ def render_view(name: str):
     <a class="btn" href="/">一覧へ</a>
   </div>
 </header>
+<div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
 <div class="shoot-bar">
   <button class="primary" id="shootBtn" onclick="toggleShoot()">▶ 撮影開始</button>
   <span class="elapsed" id="elapsed">0:00</span>
+  <button onclick="retake()" title="最初に戻ってタイマーもリセット">↺ やり直し</button>
   <button onclick="adjust(-4)">A－</button>
   <button onclick="adjust(4)">A＋</button>
   <span class="speed aux">速度
@@ -232,30 +253,95 @@ def render_view(name: str):
   </span>
   <button onclick="toggleFocus()">集中モード</button>
 </div>
+<div class="countdown" id="countdown"></div>
 <main>
   <div class="toc">{toc}</div>
   <div class="total-time aux">本文をタップして直接編集できます（触れなくなったら自動保存）／全体の目安時間：約{format_duration(total_seconds)}</div>
+  <div class="target-box aux">
+    目標の尺：
+    <input type="number" id="targetMin" min="0.5" step="0.5" placeholder="例：17">分
+    <span id="targetInfo"></span>
+  </div>
   {blocks}
 </main>
 <div class="save-flash" id="flash">保存しました</div>
 <script>
-let fs = 30;
-function adjust(d){{
-  fs = Math.max(18, Math.min(56, fs + d));
+let fs = parseInt(localStorage.getItem('shinchan_fs') || '30', 10);
+function applyFontSize(){{
   document.querySelectorAll('.txt').forEach(el => el.style.setProperty('--fs', fs + 'px'));
 }}
+function adjust(d){{
+  fs = Math.max(18, Math.min(56, fs + d));
+  applyFontSize();
+  localStorage.setItem('shinchan_fs', fs);
+}}
+applyFontSize();
 
-// 撮影バーの実際の高さを測って目次の開始位置に反映する（見切れ防止）
+// 撮影バー＋進捗バーの実際の高さを測って目次の開始位置に反映する（見切れ防止）
 function syncBarHeight(){{
   const bar = document.querySelector('.shoot-bar');
-  if (bar) document.documentElement.style.setProperty('--bar-h', bar.offsetHeight + 'px');
+  const bar2 = document.querySelector('.progress-bar');
+  const h = (bar ? bar.offsetHeight : 0) + (bar2 ? bar2.offsetHeight : 0);
+  document.documentElement.style.setProperty('--bar-h', h + 'px');
 }}
 syncBarHeight();
 window.addEventListener('resize', syncBarHeight);
 new ResizeObserver(syncBarHeight).observe(document.querySelector('.shoot-bar'));
 
 const totalSeconds = {total_seconds};
+const blockCount = {block_count};
 const fileName = {name!r};
+
+/* ===== 尺調整：目標の尺を入れると、各セクションの過不足を均等分配で表示 ===== */
+function formatDelta(sec){{
+  const sign = sec >= 0 ? '+' : '−';
+  const a = Math.abs(Math.round(sec));
+  const m = Math.floor(a / 60), s = a % 60;
+  return sign + (m > 0 ? (m + '分' + String(s).padStart(2,'0') + '秒') : (s + '秒'));
+}}
+
+function updateTargetDeltas(){{
+  const val = document.getElementById('targetMin').value;
+  const info = document.getElementById('targetInfo');
+  const badges = document.querySelectorAll('.delta-badge');
+  if (!val){{
+    info.textContent = '';
+    badges.forEach(b => {{ b.textContent = ''; b.className = 'delta-badge'; }});
+    localStorage.removeItem('shinchan_target_min');
+    return;
+  }}
+  localStorage.setItem('shinchan_target_min', val);
+  const targetSec = parseFloat(val) * 60;
+  const perSection = targetSec / blockCount;
+  const diffTotal = targetSec - totalSeconds;
+  info.textContent = '（全体で目標まであと' + formatDelta(diffTotal).replace('+','').replace('−','') +
+    (diffTotal >= 0 ? '足りません' : '超過ぎみです') + '）';
+
+  document.querySelectorAll('.block').forEach((block, i) => {{
+    const cur = parseFloat(block.dataset.duration);
+    const diff = perSection - cur;
+    const badge = document.getElementById('delta' + i);
+    if (!badge) return;
+    if (Math.abs(diff) < 3){{
+      badge.textContent = 'ちょうど良い';
+      badge.className = 'delta-badge';
+    }} else if (diff > 0){{
+      badge.textContent = 'あと' + formatDelta(diff).replace('+','') + '足したい';
+      badge.className = 'delta-badge under';
+    }} else {{
+      badge.textContent = formatDelta(diff).replace('−','') + '削れる';
+      badge.className = 'delta-badge over';
+    }}
+  }});
+}}
+document.getElementById('targetMin').addEventListener('input', updateTargetDeltas);
+{{
+  const savedTarget = localStorage.getItem('shinchan_target_min');
+  if (savedTarget){{
+    document.getElementById('targetMin').value = savedTarget;
+    updateTargetDeltas();
+  }}
+}}
 document.querySelectorAll('.block-text').forEach(el => {{
   let original = el.innerText;
   el.addEventListener('blur', () => {{
@@ -295,20 +381,67 @@ function setBlocksEditable(editable){{
 }}
 
 function toggleShoot(){{
-  shooting = !shooting;
-  paused = false;
-  const btn = document.getElementById('shootBtn');
-  document.body.classList.toggle('shooting', shooting);
-  setBlocksEditable(!shooting);
   if (shooting){{
-    btn.textContent = '■ 停止';
-    timerId = setInterval(() => {{ if (!paused){{ elapsedSec++; updateElapsedDisplay(); }} }}, 1000);
-    startAutoScroll();
+    stopShooting();
   }} else {{
-    btn.textContent = '▶ 撮影開始';
-    clearInterval(timerId);
-    cancelAnimationFrame(scrollId);
+    startCountdown();
   }}
+}}
+
+function startCountdown(){{
+  const el = document.getElementById('countdown');
+  el.classList.add('show');
+  let n = 3;
+  el.textContent = n;
+  const iv = setInterval(() => {{
+    n--;
+    if (n > 0){{
+      el.textContent = n;
+    }} else {{
+      clearInterval(iv);
+      el.classList.remove('show');
+      beginShooting();
+    }}
+  }}, 800);
+}}
+
+function beginShooting(){{
+  shooting = true;
+  paused = false;
+  document.body.classList.toggle('shooting', true);
+  setBlocksEditable(false);
+  document.getElementById('shootBtn').textContent = '■ 停止';
+  timerId = setInterval(() => {{
+    if (!paused){{
+      elapsedSec++;
+      updateElapsedDisplay();
+      updateProgressBar();
+    }}
+  }}, 1000);
+  startAutoScroll();
+}}
+
+function stopShooting(){{
+  shooting = false;
+  paused = false;
+  document.body.classList.remove('shooting', 'paused');
+  setBlocksEditable(true);
+  document.getElementById('shootBtn').textContent = '▶ 撮影開始';
+  clearInterval(timerId);
+  cancelAnimationFrame(scrollId);
+}}
+
+function retake(){{
+  stopShooting();
+  elapsedSec = 0;
+  updateElapsedDisplay();
+  updateProgressBar();
+  window.scrollTo(0, 0);
+}}
+
+function updateProgressBar(){{
+  const pct = totalSeconds > 0 ? Math.min(100, (elapsedSec / totalSeconds) * 100) : 0;
+  document.getElementById('progressFill').style.width = pct + '%';
 }}
 
 function togglePause(){{
