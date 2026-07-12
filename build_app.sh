@@ -8,6 +8,9 @@ APP_NAME="シンちゃん台本 大きい文字.app"
 
 mkdir -p "$APP_DIR"
 
+# 古いサーバープロセスが動いたままだとコード更新が反映されないため、ビルドのたびに止める
+pkill -f "$REPO_DIR/scripts/large_script_editor_server.py" 2>/dev/null || true
+
 rm -rf "$APP_DIR/$APP_NAME"
 osacompile -o "$APP_DIR/$APP_NAME" "$REPO_DIR/scripts/large_script_viewer_launcher.applescript"
 
