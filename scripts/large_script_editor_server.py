@@ -16,9 +16,11 @@ import re
 import webbrowser
 import sys
 
-PORT = 8801
+PORT_RANGE_START = 8801
+PORT_RANGE_END = 8850
 BASE_DIR = pathlib.Path(__file__).resolve().parent.parent
 SCRIPT_DIR = BASE_DIR / "03_台本"
+PORT_FILE = pathlib.Path("/tmp/ipadbiyori_shinchan.port")
 
 # セクション名のキーワード→色（縦帯・進捗ドットに使う）
 SECTION_COLORS = [
@@ -236,10 +238,25 @@ class Handler(http.server.BaseHTTPRequestHandler):
         pass  # 静かに動かす
 
 
+class Server(socketserver.TCPServer):
+    allow_reuse_address = True
+
+
+def find_free_server():
+    for port in range(PORT_RANGE_START, PORT_RANGE_END + 1):
+        try:
+            return Server(("127.0.0.1", port), Handler), port
+        except OSError:
+            continue
+    raise RuntimeError("空いているポートが見つかりませんでした")
+
+
 def main():
     SCRIPT_DIR.mkdir(exist_ok=True)
-    with socketserver.TCPServer(("127.0.0.1", PORT), Handler) as httpd:
-        url = f"http://127.0.0.1:{PORT}/"
+    httpd, port = find_free_server()
+    PORT_FILE.write_text(str(port), encoding="utf-8")
+    with httpd:
+        url = f"http://127.0.0.1:{port}/"
         webbrowser.open(url)
         print(f"台本ビューア（シンちゃん版）起動: {url}  (Ctrl+Cで終了)")
         try:
