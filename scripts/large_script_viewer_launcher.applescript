@@ -4,7 +4,8 @@
 set repoPath to (POSIX path of (path to home folder)) & "iPadbiyoriRemort"
 set serverScript to repoPath & "/scripts/large_script_editor_server.py"
 
-do shell script "pkill -f large_script_editor_server.py; exit 0"
-do shell script "nohup python3 " & quoted form of serverScript & " > /tmp/ipadbiyori_server.log 2>&1 &"
+-- 自分のサーバーだけを対象にする（他アプリの同名スクリプトを誤って止めないよう、リポジトリの絶対パスで指定）
+do shell script "pkill -f " & quoted form of serverScript & "; exit 0"
+do shell script "nohup python3 " & quoted form of serverScript & " > /tmp/ipadbiyori_shinchan_server.log 2>&1 &"
 delay 1
-do shell script "open http://127.0.0.1:8766/"
+do shell script "open http://127.0.0.1:8801/"

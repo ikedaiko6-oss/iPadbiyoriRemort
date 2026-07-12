@@ -4,7 +4,7 @@ set -e
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 APP_DIR="$HOME/Desktop/アプリ"
-APP_NAME="iPad日和台本 大きい文字.app"
+APP_NAME="シンちゃん台本 大きい文字.app"
 
 mkdir -p "$APP_DIR"
 
